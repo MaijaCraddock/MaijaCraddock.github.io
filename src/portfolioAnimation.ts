@@ -11,7 +11,7 @@ interface VoronoiSimulation {
 
 type VoronoiConstructor = new (
   canvas: HTMLCanvasElement,
-  options: { rows: number cols: number cellPx: number },
+  options: { rows: number; cols: number; cellPx: number },
 ) => VoronoiSimulation
 
 declare global {
@@ -47,14 +47,8 @@ const baseSites: Array<[number, number]> = [
 // Keep roughly the original cell count, but match the hero's aspect ratio so
 // cells stay square no matter how tall or wide the hero is.
 function gridFor(hero: HTMLElement) {
-  const aspect = Math.max(
-    0.3,
-    hero.clientWidth / Math.max(1, hero.clientHeight),
-  )
-  const cols = Math.max(
-    24,
-    Math.round(Math.sqrt(BASE_ROWS * BASE_COLS * aspect)),
-  )
+  const aspect = Math.max(0.3, hero.clientWidth / Math.max(1, hero.clientHeight))
+  const cols = Math.max(24, Math.round(Math.sqrt(BASE_ROWS * BASE_COLS * aspect)))
   const rows = Math.max(12, Math.round(cols / aspect))
   return { rows, cols }
 }
@@ -69,8 +63,7 @@ function loadVoronoiShader() {
     const script = document.createElement("script")
     script.src = "/voronoi-ca.js"
     script.onload = () => resolve()
-    script.onerror = () =>
-      reject(new Error("Unable to load the Voronoi shader"))
+    script.onerror = () => reject(new Error("Unable to load the Voronoi shader"))
     document.head.append(script)
   })
 
@@ -120,10 +113,12 @@ export function startPortfolioAnimation() {
     if (cancelled || !window.VoronoiCA) return
 
     const { rows, cols } = gridFor(hero)
-    const sites = baseSites.map(([row, col]): [number, number] => [
-      Math.min(rows - 1, Math.round((row * rows) / BASE_ROWS)),
-      Math.min(cols - 1, Math.round((col * cols) / BASE_COLS)),
-    ])
+    const sites = baseSites.map(
+      ([row, col]): [number, number] => [
+        Math.min(rows - 1, Math.round((row * rows) / BASE_ROWS)),
+        Math.min(cols - 1, Math.round((col * cols) / BASE_COLS)),
+      ],
+    )
     const simulation = new window.VoronoiCA(canvas, {
       rows,
       cols,
