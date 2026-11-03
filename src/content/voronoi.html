@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Voronoi Diagrams and Fortune Sweep — Maija Craddock</title>
+  <meta name="description" content="An intuition-first walkthrough of Fortune's sweepline algorithm for Voronoi diagrams.">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+  <script defer src="math.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="inner">
+      <a class="brand" href="index.html"><span class="blob" aria-hidden="true"></span>Maija Craddock</a>
+      <nav aria-label="Main">
+        <a href="index.html">Home</a>
+        <a href="about.html">Portfolio</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="article-fonts">
+    <h1>Voronoi Diagrams and Fortune Sweep</h1>
+    <p class="byline">Updated <time datetime="2026-10-27">Oct 2026</time> · <a href="https://github.com/MaijaCraddock/UnityVoronoi">View on GitHub</a></p>
+
+    <p class="lead">Voronoi Diagrams are one of my favorite mathematical structures, and for several reasons. First of all, Voronoi diagrams appear in nature quite often. They appear on giraffe pelts, certain chemical systems, or tree canopies. Their wikipedia article defines them as “a partition of a plane into regions close to each of a given set of objects,” but I prefer a reworded version of the same concept. </p>
+
+    <figure class="nature-figure">
+      <div class="nature-gallery">
+        <div class="nature-landscapes">
+          <img src="/images/voronoi-giraffe.jpg" alt="Close-up of the polygonal pattern on a giraffe's coat">
+          <img src="/images/voronoi-tree-canopy.jpg" alt="Aerial view of clustered green tree canopies">
+        </div>
+        <img class="nature-chemical" src="/images/voronoi-chemical-system.png" alt="Three examples of Voronoi-like cells formed in chemical systems">
+      </div>
+      <figcaption>Voronoi patterns in nature: a giraffe pelt, tree canopies, and stable chemical systems.</figcaption>
+    </figure>
+
+    <p>Given a set of sites, partition a plane into faces, where the points of each face “belong” to the site closest to it on the plane.</p>
+
+    <figure class="figure-row">
+      <img src="/images/vorresult.jpg" alt="Voronoi diagram output">
+    </figure>
+
+    <p>If you follow this rule, you’ve constructed a voronoi diagram! One thing immediately derived from this explanation is that a point on the plane equally closest to two different sites forms an edge on the diagram, and a vertex is any point on the plane that is equally close to three or more closest sites.</p>
+    <p>You can also imagine them forming by visualizing each site growing radially, in fact, this is the reason why it's so common a pattern in natural life, I am led to believe.</p>
+    <p>Voronoi diagrams are extremely useful structures in simulation, pathfinding, and computer graphics. They have some very nice features, these are the ones I find most notable:</p>
+    <ul>
+      <li>Voronoi cells are convex</li>
+      <li>Voronoi diagrams are connected once bound</li>
+      <li>Voronoi diagrams are planar</li>
+      <li>They have a very impressive dual that is constructible in O(n), the Delaunay deserves an article of its own one day</li>
+    </ul>
+
+    <p>More interesting to me than the natural presence of these patterns, is the algorithm involved in constructing them, and the mathematical theory that surrounds it. Much of this article is based on the 7th chapter of <em>Computational Geometry</em> (3rd ed.) by Mark de Berg et al., and the original Sweepline Algorithm, Fortune Sweep, developed by Steven Fortune and published in 1986 in the paper "A sweepline algorithm for Voronoi diagrams." I highly recommend Mark de Berg’s book for both understanding this algorithm and for any reader interested in computational geometry in general! </p>
+
+    <div class="toc" aria-label="On this page">
+      <b>On this page</b>
+      <ul>
+        <li><a href="#structure">Structural Discussion</a> (<a href="#edges">Voronoi Edges</a>, <a href="#vertices">Voronoi Vertices</a>)</li>
+        <li><a href="#events">Events</a> (<a href="#site-events">Site Events</a>, <a href="#circle-events">Circle Events</a>)</li>
+        <li><a href="#data-structures">Algorithm Data Structures</a></li>
+        <li><a href="#algorithm">Algorithm and Event handling</a></li>
+        <li><a href="#appendix">Appendix</a> (<a href="#a1">intersection math</a>, <a href="#a2">DCEL</a>, <a href="#a3">complexity</a>)</li>
+      </ul>
+    </div>
+
+    <h2 id="structure">Structural Discussion<a class="anchor" href="#structure" aria-label="Link to this section">#</a></h2>
+    <p>Going back to our definition, let’s look at a couple simple examples. Given two sites, what would our diagram look like?</p>
+    <p>If we were to draw a line from one point to the second point, and take the perpendicular bisection of that line, we find that the voronoi diagram consists of two half planes.</p>
+    <p>All points on the graph closer to the orange site lie on the orange halfplane and all points on the graph that lie closer to the green site lie on the green half plane. Each point on the line is equidistant to both sites.</p>
+    <figure class="figure-row">
+      <img src="/images/image16.png" alt="Two sites on the plane">
+      <img src="/images/image10.png" alt="Two sites split the plane into an orange half plane and a green half plane along their perpendicular bisector">
+    </figure>
+    <p>When we add a third site, we can see that a single bisector is no longer enough to calculate the voronoi diagram. Instead, we calculate a bisector between each point. When one bisector intersects another, we can see that a vertex forms on the voronoi diagram. Any continuation of a bisector past intersection is essentially discarded.</p>
+    <figure class="figure-row">
+      <img src="/images/image15.png" alt="Three sites with the bisector between each pair drawn as a full line">
+      <img src="/images/image17.png" alt="Three sites and their Voronoi diagram, where bisectors stop at the vertex">
+    </figure>
+    <p>The algorithm still works when a fourth point is added, we can find all bisectors and find intersections, but something interesting also happens when we add our fourth point.</p>
+    <p>Firstly, we can already see that the growth of bisectors is going to be quite inefficient. It will actually be quadratic in this case.</p>
+    <p>Secondly, we don't actually need to calculate the bisectors between each point, even after only four points, we can already see that there is some bisector that goes completely unused, specifically, the bisector between orange and red.</p>
+    <p>Thinking about it in another way, the red site and the orange site share no common edge. In this scenario, we calculate a bisector between them that may have been otherwise avoided.</p>
+    <figure class="figure-row">
+      <img src="/images/image6.png" alt="Four sites with the bisector between each pair drawn as a full line">
+      <img src="/images/image11.png" alt="Four sites and their Voronoi diagram">
+    </figure>
+    <p>We can see how this will get out of hand very quickly, as any two sites that share no edges are going to have resources and computations wasted on them. We can certainly find a better algorithm.</p>
+    <p>Instead of our previous method, we can use a sweep line algorithm to construct our voronoi diagram. For now, I’ll speak vaguely about sweepline algorithms, but if it doesn’t make sense, it probably will once specifics are discussed.</p>
+    <p>Generally, sweepline algorithms have some structure to store a line that starts at the top of a plane and moves downwards. There is also some way to operate on the plane described via one or more types of events. These events are also stored in some way, and when the sweep line encounters one of these events, it performs some function to handle that event. The algorithm continues so long as there are events. </p>
+    <p>The nice thing about these algorithms is that they don't actually need to sweep through the entirety of a plane, we simply need to figure out the order that events appear in, and teleport the sweep line through the plane at the same spots these events appear.</p>
+    <p>Let's take another look at our simple case but lets see what it looks like using a sweep line.</p>
+    
+
+
+
+    <h3 id="edges">Voronoi Edges</h3>
+    <p>Given our sweepline, we treat the line as a directrix and we treat our points as a focus for a parabola. An important observation is that the intersection between all parabolas above the sweepline lie on a voronoi edge, although there is a bit more nuance that makes this not entirely true when I cover something called the beachline. We can also look at this mathematically, but as it may be distracting from the intuition behind the algorithm, I’ve added an addendum to the bottom of the page if the program specifics interest you <a href="#a1">[1]</a>, I recommend reading the algorithm’s structure first, or at least waiting to visit until after we go over site events.</p>
+    <p>For now, the important thing to focus on is the intuition behind why this happens. The parabola formed from a focus and a directrix is the set of all points whose distance from the focus is equal to the distance from the directrix. </p>
+    <p>The distance from the directrix is a vertical line from the directrix to the point on the parabola, and the distance from the focus is a line of the same magnitude at some angle. </p>
+    <p>When we consider two parabolas formed by the same directrix, the intersection of both parabolas also occurs when the distance from the directrix of both parabolas is the same vertical line, and because this vertical line is the same size in both scenarios, the intersection point’s distance to focus \(i\) equals its distance to focus \(j\). As the directrix moves, this statement remains true. </p>
+    <p>We defined a Voronoi edge as the set of points equally close to two sites. Each parabola is the set of points equally far from its site and the directrix. So when two parabolas intersect, that point is the same distance from the directrix on both parabolas, and therefore the same distance from both sites. As the directrix moves, this intersection moves with it, tracing out points that are equally close to the two sites. </p>
+    <p>Hopefully this builds the intuition necessary to understand why this tracing occurs, we keep in mind that this intersection under general cases occurs twice per parabolic pair.</p>
+    <figure class="figure-row">
+      <img src="/images/image2.png" alt="Three sites with the sweepline, their parabolas, and the beachline drawn solid with hidden portions dotted">
+    </figure>
+    <p>When a third site is added to the mix, we also have more to consider. We could find the intersections for all parabolas above the directrix, but as before in our inefficient algorithm, this would lead to waste, as obviously not all intersections will be considered. For example, in the figure above, we can obviously see that the blue site and the green site, at this point, do not have an edge being traced by their intersections. </p>
+    <p>When discussing intuition, it's important that we don't get so swept up in discussion that we forget the big picture: a point is only an edge when it is closest to two sites, therefore, we only care about a parabola’s intersections that no other parabola lies beneath. Because the blue site’s parabola intersects with orange’s on both its left and right intersections before it would with the green site’s parabola, we don’t trace an edge between blue and green.</p>
+    <p>The segment of the parabola that we actually consider in intersections is thus only the solid line portions of the figure, we ignore the dotted portions. Because of its visual shape, we call the arcs that make up this considered set the beachline. This will come up again later. For risk of skipping too far ahead at once, we define the beachline by its arc order, in this case the beachline would be [orange, blue, orange, green, orange (off screen)], the same example will come up again later, so don’t bother thinking too hard about this for now. Trivially, we can see that one parabola can appear as multiple arcs in the beachline, this is by design and is explored in detail when discussing data structures. </p>
+    <p class="note">The most important thing about the beachline to keep in mind for now is that everything above the beachline is set in stone and will not be updated. This is a powerful invariant, and it matters for Voronoi edges, vertices, and events.</p>
+
+    
+    <figure class="figure-row">
+      <img src="/images/image2.png" alt="Three sites with the sweepline, their parabolas, and the beachline drawn solid with hidden portions dotted">
+    </figure>
+
+    <h3 id="vertices">Voronoi Vertices</h3>
+    <p>When a third site is added, we have the additional consideration of voronoi vertices. Luckily the intuition is very similar to that of Voronoi edge’s.</p>
+    <p>Taking a step back to the moment we introduce a third site, we can see the creation of a degenerate parabola (which is not a real parabola) that extends vertically from this point. This line extends vertically and intersects only once with a single arc above it, this is important later on, but for now, we look at a point where the directrix moves just downwards enough to create a true parabola.</p>
+    <p>Right after the directrix passes the third focus, we can see that three parabolas are formed by three foci and a shared directrix. The beachline as discussed previously is formed by the outer/lower arcs to the left and right of intersections. As the directrix moves downwards, we can tell trivially that the parabolas grow wider. As these parabolas widen, an arc \(j\), which sits between two arcs \(i\) and \(k\) made by different neighbors can shrink, and eventually disappear. </p>
+    <p>Before moving onwards, it's useful to risk being somewhat verbose, and go through our example to see which arcs on our beachline this qualifies for.</p>
+    <p class="beachline-state"><b>[orange</b>, <b>blue</b>, <b>orange</b>, <b>green</b>, <b>orange</b> (off screen)]</p>
+    <p>We can immediately rule out both outer arcs, orange and orange (offscreen), as to be shrunk requires one to have two neighbors.</p>
+    <p class="beachline-state">[orange, <b>blue</b>, <b>orange</b>, <b>green</b>, orange (off screen)]</p>
+    <p>Blue is also out for consideration, as both its left and right neighbors are created by orange arcs.</p>
+    <p class="beachline-state">[orange, blue, <b>orange</b>, <b>green</b>, orange (off screen)]</p>
+    <p>The same goes for green, who also sits between two orange arcs.</p>
+    <p class="beachline-state">[orange, blue, <b>orange</b>, green, orange (off screen)]</p>
+    <p>But the middle orange arc, which sits between blue to its left and green to its right, is shrinking!</p>
+    <p class="beachline-state">[orange, blue, <b>orange</b>, green, orange (off screen)]</p>
+
+    <figure class="figure-row">
+      <img src="/images/image1.png" alt="Moment on the sweepline where three parabolas intersect, and a Voronoi vertex is created">
+    </figure>
+    
+    <p>Moving the directrix down, we can find the snapshot right when the arc disappears. At this point, we can see that there is an intersection between orange, green and blue’s parabolas. The same logic as before applies. Call the intersection point \(q\). Because \(q\) lies on all three parabolas, its distance to each site equals its distance to the directrix. That distance is the same in all three cases, so \(q\) is equally far from all three sites. This matches our definition of a Voronoi vertex.</p>
+    <p>We previously defined a Voronoi vertex as a point that is equally closest to three or more sites; this intersection point between three or more parabolas satisfies the definition. The same continuation of wider logic applies as before, where we once again only consider closest points. If there were an intersection between three parabolas above the beachline, it would not be one that is closest, and is irrelevant to the algorithm.</p>
+
+    <h2 id="events">Events<a class="anchor" href="#events" aria-label="Link to this section">#</a></h2>
+    <p>We glossed over two important things of note, that being how the beachline changes, and when it does. We noted previously that as the directrix moves, parabolas grow wider, but we didn’t point out something else that remains constant. That being the order of the beachline breakpoints.</p>
+    <p>Up until the moment where the three parabolas intersect, the beachline’s order remains constant. This is true for the beachline at any point, outside of two conditions. The first is the addition of a new arc to the beachline, and the second is the removal of an arc to the beachline. Sneakily, I have already shown both of these events without defining them, and you have probably already built most of the intuition required to conceptualize them.</p>
+    <p>The event when arcs are added is referred to as a site event, and those where an arc is removed are referred to as a circle event. For now, let's just discuss site events, which are the less daunting of the two.</p>
+
+    <h3 id="site-events">Site Events</h3>
+    <p>A site event occurs when arcs are added to the beachline. A new arc is created whenever a new site extends past the directrix. This occurred earlier when we discussed the addition of a third site, more specifically, when we discussed the introduction of a degenerate parabola to the beachline.</p>
+    <p>When a site event occurs, we consider both its degenerate case and the moment directly after the degenerate case, when it turns into a proper parabola with two intersection points. Firstly, the degenerate case is considered when finding the arc directly above this new site. In our example, this arc happens to be the first orange arc. To make things simpler to follow, from here on out, I will keep an up to date beachline to follow at all times.</p>
+    <figure class="figure-row">
+      <img src="/images/image7.png" alt="The blue site on the sweepline, shown as a degenerate parabola: a vertical line">
+    </figure>
+    <p>Moments before the introduction of the site, the beachline was [orange, green, orange (off screen)]. The degenerate case tells us that the arc directly above the blue site is the first orange arc in [<b>orange</b>, green, orange (off screen)]. The actual method we use to find this is discussed later, in the <b>Beachline</b> section.</p>
+    <figure class="figure-row">
+      <img src="/images/image2.png" alt="Three sites with the sweepline, their parabolas, and the beachline drawn solid with hidden portions dotted">
+    </figure>
+    <p>The usage of the degenerate case stops here. From here on, we consider the smallest step possible to make the case non-degenerate, and find both intersections on the beachline. Because the degenerate case found the arc above to be the first of the orange arcs, we know that the left and right intersections immediately after the blue site creates a true parabola will be orange. The beachline becomes [orange, blue, orange, green, orange (off screen)].</p>
+
+    <h3 id="circle-events">Circle Events</h3>
+    <figure class="figure-row">
+      <img src="/images/image13.png" alt="A circle through three sites with the Voronoi vertex at its center">
+    </figure>
+    <p>A circle event occurs when an arc is removed from the beachline. An arc is removed whenever it shrinks to a distance of zero after being squeezed by two neighboring arcs (created by unique sites). This occurred previously when we discussed voronoi vertices, as a voronoi vertex is formed wherever an arc is squeezed to zero length.</p>
+    <p>These types of events are referred to as circle events because the vertex formed by them lies at the circumcenter of the circle formed by the three sites.</p>
+    <p>We already mentioned this previously, but it bears repeating that a circle event occurs when three arcs form from unique sites on a beachline. This is because parabolas always grow wider, and an arc triple of \([i, j, i]\) on the beachline will never engulf \(j\).</p>
+    <p>Circle events have additional nuances, most of which relate to validity. Circle events can start or become invalid during runtime. A valid circle event, as stated earlier, marks the existence of a voronoi vertex. An invalid circle event is one that satisfies the construction on a circle event, that being a unique triple on the beachline, but does not result in a voronoi vertex being created. Let's look at an example before discussing how or when this occurs.</p>
+
+    <figure class="figure-row">
+      <img src="/images/image9.png" alt="All circle events of a four-site diagram: two valid circles and two invalid circles">
+    </figure>
+    <p>In this example, which shows all circle events in retrospect after the completed voronoi diagram, we can see there are two valid circle events and two invalid circle events.</p>
+    <p>The valid circle events are the red circle, defined by the [orange, green, blue] site intersection, and the purple circle defined by the [blue, green, red] site intersection.</p>
+    <p>The invalid circles are the black circle, defined by the non-existing [orange, blue, red] site intersection and the blue circle defined by the non-existing [orange, green, red] site intersection.</p>
+    <p>In retrospect, we can see that the valid circles are ones where no other site lies inside it, and invalid circles contain some site inside of them geometrically (we see soon that emptiness is not the only criteria necessary for validity). Unfortunately this is another case of inefficiency, we would like to avoid needing to check every other site in our plane each time we check a circle event. This validation needs some work. To help, we’ll discuss circle event creation, which will check if a circle at least starts valid or not. Then, we’ll discuss how a circle event may become invalid during runtime.</p>
+
+    <h4>Circle Event Creation</h4>
+    <figure class="figure-row">
+      <img src="/images/image2.png" alt="Three sites with the sweepline, their parabolas, and the beachline drawn solid with hidden portions dotted">
+      <img src="/images/image1.png" alt="The sweepline just below the blue site, whose parabola is a narrow arc">
+    </figure>
+    <p>Let's go back to the previous example one more time, and observe the beachline:</p>
+    <p class="beachline-state">[orange, blue, orange, green, orange (off screen)]</p>
+    <p>We can see the introduction of the blue site creates a triple [..., blue, orange, green,…] that indicates a circle event. The circle remains valid, and a vertex is created.</p>
+    <p>Moments afterwards, when the middle orange arc disappears, we have the new beachline:</p>
+    <p class="beachline-state">[orange, blue, green, orange]</p>
+    <p>The disappearance of the middle orange arc created two new circle events, [orange, blue, green, …] and [..., blue, green, orange]!</p>
+    <p>The first major conclusion you should draw from this is that any alteration of the beachline, both the removal and addition of an arc, can create new circle events. In other words, a site event and a circle event will need to check if a new circle event is being created by its conclusion.</p>
+    <p>Something else that you might notice is that neither of these result in vertices, and are thus invalid events. This wasn’t due to the fact that a site event created the first, and a circle event the remaining two. Rather it was the location of the circumcircle and the strong beachline invariant we discussed earlier.</p>
+    <p>The invariant we mentioned earlier was that all points above the beachline, which are categorized as being a point belonging to a face, a point that is an edge between two other faces, or a point that is a vertex between three or more faces must all remain unchanged. A circle event that begins invalid would place a vertex in a location that violates this invariant.</p>
+    <p>In other words, the center of the latter two circle events lies above the beachline, and it is invalid on creation. As we’ll see in the data structures section, we don't actually track the beachline mathematically or store the parabolas. So how is it that we can determine if a circle event is above or below the beachline during creation, and thus valid or invalid?</p>
+    <p>The orientation of the sites that create each circle tells us everything we need to know! The phrasing we’ve been using up until now is that the middle arc is being “squeezed”. This was the simplest way to put it before, but it may be stifling some intuition at this point. A better way to put it is that the breakpoint between the left arc and the middle arc, and the breakpoint between the middle arc and the right arc are moving towards each other, or converging. Rather than being “squeezed” until the middle arc disappears, the breakpoints converge until they meet one another on the beachline.</p>
+    <p>But this is not guaranteed to be the case, just after the previous circle event, we saw that the triples [orange, blue, green, …] and [..., blue, green, orange] did not lead to any vertices being created. If we move the directrix down slightly, we can see the difference between the two situations. Rather than breakpoints moving toward one another, they grow further apart, the breakpoint between orange and blue, and the breakpoint between blue and green will never converge, and despite the fact that the outer breakpoint between green and orange is not shown, at this point your intuition likely points you in the right direction that these will also not converge into one another. For this reason, the circle events for these triples are invalid on creation.</p>
+    <figure class="figure-row">
+      <img src="/images/image1.png" alt="The sweepline just below the blue site, whose parabola is a narrow arc">
+      <img src="/images/image4.png" alt="The sweepline moved further down: the blue parabola has widened and the breakpoints move apart">
+    </figure>
+    <p>We can calculate if breakpoints converge or diverge with an orientation test. When the triples are oriented clockwise, the middle arc is between two converging breakpoints, as is the case in the first triple. When the triples are oriented counterclockwise, the middle arc is between two diverging breakpoints, as is the case for the two latter triples.</p>
+    <p>If this isn’t feeling very intuitive, take a look at the figures again, and remember that the edges of our faces are being traced by our breakpoints. The edges between orange and blue, and the edges between blue and green will never intersect after the vertex between all three is created!</p>
+    <p class="note">Note: If the definition of orientation is unfamiliar, we can think of it as “gift wrapping” the triangle formed between the three sites. In the triple blue, orange, green, we determine that the orientation is clockwise, because moving from blue to orange without any sites in between requires a clockwise rotation, and the same can be said for orange to green. If we were to move counterclockwise from blue, we would pass green on our way to orange. Try this thought process with the two other triples for a counterclockwise example!</p>
+    <p>The determinant of the three sites tells us its orientation. Given \(p_a(x_a, y_a)\), \(p_b(x_b, y_b)\), and \(p_c(x_c, y_c)\), the determinant equals</p>
+    <div class="derivation">
+      <div class="rhs">\[ (x_b - x_a)(y_c - y_a) - (y_b - y_a)(x_c - x_a). \]</div>
+    </div>
+    <p>Assuming y-up, a determinant \(\lt 0\) shows a clockwise turn, a determinant \(\gt 0\) shows a counterclockwise turn, and a determinant \(= 0\) occurs when all sites are collinear (and no circle is formed). Something of important note is that this calculation is very sensitive to floating point error, it is therefore highly recommended to use some robust orientation library. In my implementation, I ported the parts I needed from Jonathan Shewchuk’s <code>predicates.c</code> to C#, which didn’t take much work.</p>
+
+    <h4>Circle Event Invalidation</h4>
+    <p>Circle events can also be invalidated during runtime. Luckily, this is easier to account for and prove than invalidity on creation. Similar to circle event creation, circle event invalidation can also occur whenever the beachline changes. In other words, both site events and circle events invalidate circle events during runtime.</p>
+    <p>Lets look at a totally valid circle event, and see how it becomes invalidated at runtime. Try your best to avoid thinking about the totally unsuspicious empty face on the diagram.</p>
+
+    <figure class="figure-row">
+      <img src="/images/image3.png" alt="Three sites partway through the sweep, with an unfinished empty region">
+      <img src="/images/image8.png" alt="The sweep in progress as the blue site’s parabola grows beneath the orange arc">
+      <img src="/images/image14.png" alt="The circle through the blue, orange, and green sites while the sweep is in progress">
+    </figure>
+    <p>The state of the beachline as the sweepline passes the blue site moves from:</p>
+    <p class="beachline-state">[orange, green, orange (off screen)]</p>
+    <p>to:</p>
+    <p class="beachline-state">[orange, blue, orange, green, orange (off screen)]</p>
+    <p>The triple blue, orange, green is valid, as it passes our orientation test. The orange arc will disappear as the breakpoint between blue and orange and the breakpoint between orange and green converge.</p>
+    <figure class="figure-row">
+      <img src="/images/image12.png" alt="A circle through three sites with a fourth site not yet reached by the sweepline">
+    </figure>
+    <p>The introduction of a fourth site changes things. The fact that the sweepline has not yet reached the new site does not change this. As far as the algorithm and beachline are concerned, the circle event is still completely valid, and there is no way of knowing it will be invalid later.</p>
+    <p>The site event associated with the red site changes the beachline from:</p>
+    <p class="beachline-state">[orange, blue, orange, green, orange (off screen)]</p>
+    <p>to:</p>
+    <p class="beachline-state">[orange, blue, orange, red, orange, green, orange (off screen)]</p>
+    <p>Our original triple was blue, orange, green in:</p>
+    <p class="beachline-state">[orange, <b>blue, orange, green</b>, orange (off screen)]</p>
+    <p>This change to the beachline split the orange arc, and inserted two new breakpoints associated with the red arc, turning</p>
+    <p class="beachline-state">[orange, <b>blue, orange, green</b>, orange (off screen)] 
+      <br>→ [orange, <b>blue, orange, red, orange, green</b>, orange (off screen)]</p>
+    <figure class="figure-row">
+      <img src="/images/image5.png" alt="A fourth, red site inside the circle, splitting the orange arc">
+    </figure>
+    <p>The old triple no longer exists, and becomes invalidated by a site event. A similar scenario can occur after a circle event. It is completely possible for a circle event to delete a middle arc that happens to be the left or right arc of another circle event. For example, imagine points \(p_i\), \(p_j\), \(p_k\), and \(p_n\), and the triples \([p_i, p_j, p_k]\) and \([p_j, p_k, p_n]\) on the beachline. In either case, whichever circle event were to occur first would invalidate the other, as the first circle event removes \(p_j\) from the beachline, and \([p_j, p_k, p_n]\) no longer exists. It is true that the new triple \([p_i, p_k, p_n]\) exists from this event’s conclusion, but this is neither guaranteed to be valid, nor is it the same event. The second firing first would remove \(p_k\), and the same logic follows.</p>
+    <p>A circle event that remains valid as the directrix passes through the lowest point of its circle guarantees the creation of a voronoi vertex due to our strong beachline invariant. Because of this, when we handle site events, we handle the beachline while the directrix is located at that site’s y coordinate. For circle events, we handle the beachline while the directrix is located at the lowest point on the circle.</p>
+    <p>Circle event creation showed that a site event and a circle event can each lead to the creation of new circle events, each of which may be valid or invalid on creation. Circle event invalidation showed that a site event and a circle event can each lead to the invalidation of a circle event during runtime. With this, we have most of the information necessary to algorithmically deal with event handling, but we’re still missing the structure that holds both the beachline and the sweepline.</p>
+
+    <h2 id="data-structures">Algorithm Datastructures<a class="anchor" href="#data-structures" aria-label="Link to this section">#</a></h2>
+    <p>The sweepline starts from the top of our infinite plane and moves downwards until all events are handled. As is the case with many other sweepline algorithms, we are going to use a priority queue to store our sweepline. This queue sorts events by priority, and pops off the event with the highest priority when a new event needs to be handled. In my implementation I use a max heap priority queue, and handle deletion with a valid bit, but this does technically add storage, as we store invalid circles all the way until they are being processed. If this is a concern of yours, and you don’t mind the \(O(\log n)\) deletion time, it could be worth considering using an augmented binary heap or balanced binary search tree for the sweepline. In any case, the important part is that you have some queue that can dynamically change order, as events will be added into the middle of the event queue, which a standard queue does not allow for. The priority queue starts with each site event known on initialization, and as events are handled, circle events that are valid on creation will be added to the event queue at runtime.</p>
+    <p>The beachline is more involved. We mentioned earlier that the parabolas of our beachline are not stored. This makes sense, as each arc on the beachline changes at each event, even those that are distant from the event being handled, and are likely to be unnecessary.</p>
+    <p>Instead, we keep track of the breakpoints. Up until now, I have been describing breakpoints of points \(p_i\) and \(p_j\) as “the breakpoint between \(p_i\) and \(p_j\)”; from here I will be using the shorthand \(\langle p_i, p_j\rangle\) to describe the same breakpoint.</p>
+    <p>The order of breakpoints of each arc on the beachline only change when an event is being handled, and only some of those breakpoints at that. This is useful, as it means we can be sure that the order of breakpoints doesn’t change as the directrix and beachline move, and when they do change, we know when and how, and can adjust the status structure accordingly. To track the breakpoints, we use a balanced binary search tree, which allows us to find the arc directly above a point in \(O(\log n)\) time. The BBST, which in my implementation is an AVL tree, is created with different logic for internal nodes and external nodes. For internal nodes, we store the breakpoints in the order they appear on the beachline from left to right. For external nodes, we store the arcs as they appear on the beachline from left to right. The structure itself is easy to understand with a simple visual example.</p>
+
+    <figure class="diagram">
+      <svg viewBox="0 0 800 335" role="img" aria-labelledby="tree-title" xmlns="http://www.w3.org/2000/svg"><title id="tree-title">Beach line as a balanced binary search tree. Internal nodes are breakpoints between two arcs; leaves are arcs.</title><defs><clipPath id="rh"><rect x="0" y="-30" width="60" height="60"/></clipPath></defs><text x="8" y="44" class="ta">Breakpoint / Internal Node</text><line x1="180" y1="40" x2="316" y2="40" class="te"/><text x="8" y="160" class="ta">Arc / Leaf Node</text><line x1="50" y1="167" x2="80" y2="180" class="te"/><line x1="351" y1="62" x2="181" y2="97" class="te"/><line x1="391" y1="62" x2="562" y2="97" class="te"/><line x1="151" y1="142" x2="120" y2="180" class="te"/><line x1="191" y1="142" x2="217" y2="182" class="te"/><line x1="207" y1="227" x2="175" y2="275" class="te"/><line x1="247" y1="227" x2="280" y2="275" class="te"/><line x1="552" y1="142" x2="467" y2="182" class="te"/><line x1="592" y1="142" x2="677" y2="182" class="te"/><line x1="437" y1="227" x2="405" y2="275" class="te"/><line x1="477" y1="227" x2="510" y2="275" class="te"/><line x1="667" y1="227" x2="635" y2="275" class="te"/><line x1="707" y1="227" x2="740" y2="275" class="te"/><g transform="translate(371 40)" role="img" aria-label="Breakpoint O R"><ellipse rx="52" ry="24" fill="#ffab40" class="tn"/><ellipse rx="52" ry="24" fill="#ff0000" clip-path="url(#rh)" class="tn"/><rect x="-27" y="-12" width="20" height="24" rx="2" fill="#000"/><text x="-17" y="6" text-anchor="middle" class="tl">O</text><rect x="7" y="-12" width="20" height="24" rx="2" fill="#000"/><text x="17" y="6" text-anchor="middle" class="tl">R</text></g><g transform="translate(171 120)" role="img" aria-label="Breakpoint O B"><ellipse rx="52" ry="24" fill="#ffab40" class="tn"/><ellipse rx="52" ry="24" fill="#4488ff" clip-path="url(#rh)" class="tn"/><rect x="-27" y="-12" width="20" height="24" rx="2" fill="#000"/><text x="-17" y="6" text-anchor="middle" class="tl">O</text><rect x="7" y="-12" width="20" height="24" rx="2" fill="#000"/><text x="17" y="6" text-anchor="middle" class="tl">B</text></g><g transform="translate(572 120)" role="img" aria-label="Breakpoint O G"><ellipse rx="52" ry="24" fill="#ffab40" class="tn"/><ellipse rx="52" ry="24" fill="#38761d" clip-path="url(#rh)" class="tn"/><rect x="-27" y="-12" width="20" height="24" rx="2" fill="#000"/><text x="-17" y="6" text-anchor="middle" class="tl">O</text><rect x="7" y="-12" width="20" height="24" rx="2" fill="#000"/><text x="17" y="6" text-anchor="middle" class="tl">G</text></g><g transform="translate(227 205)" role="img" aria-label="Breakpoint B O"><ellipse rx="52" ry="24" fill="#4488ff" class="tn"/><ellipse rx="52" ry="24" fill="#ffab40" clip-path="url(#rh)" class="tn"/><rect x="-27" y="-12" width="20" height="24" rx="2" fill="#000"/><text x="-17" y="6" text-anchor="middle" class="tl">B</text><rect x="7" y="-12" width="20" height="24" rx="2" fill="#000"/><text x="17" y="6" text-anchor="middle" class="tl">O</text></g><g transform="translate(457 205)" role="img" aria-label="Breakpoint R O"><ellipse rx="52" ry="24" fill="#ff0000" class="tn"/><ellipse rx="52" ry="24" fill="#ffab40" clip-path="url(#rh)" class="tn"/><rect x="-27" y="-12" width="20" height="24" rx="2" fill="#000"/><text x="-17" y="6" text-anchor="middle" class="tl">R</text><rect x="7" y="-12" width="20" height="24" rx="2" fill="#000"/><text x="17" y="6" text-anchor="middle" class="tl">O</text></g><g transform="translate(687 205)" role="img" aria-label="Breakpoint G O"><ellipse rx="52" ry="24" fill="#38761d" class="tn"/><ellipse rx="52" ry="24" fill="#ffab40" clip-path="url(#rh)" class="tn"/><rect x="-27" y="-12" width="20" height="24" rx="2" fill="#000"/><text x="-17" y="6" text-anchor="middle" class="tl">G</text><rect x="7" y="-12" width="20" height="24" rx="2" fill="#000"/><text x="17" y="6" text-anchor="middle" class="tl">O</text></g><g role="img" aria-label="Arc O"><rect x="65" y="180" width="100" height="50" fill="#ffab40" class="tn"/><rect x="105" y="193" width="20" height="24" rx="2" fill="#000"/><text x="115" y="211" text-anchor="middle" class="tl">O</text></g><g role="img" aria-label="Arc B"><rect x="120" y="275" width="100" height="50" fill="#4488ff" class="tn"/><rect x="160" y="288" width="20" height="24" rx="2" fill="#000"/><text x="170" y="306" text-anchor="middle" class="tl">B</text></g><g role="img" aria-label="Arc O"><rect x="235" y="275" width="100" height="50" fill="#ffab40" class="tn"/><rect x="275" y="288" width="20" height="24" rx="2" fill="#000"/><text x="285" y="306" text-anchor="middle" class="tl">O</text></g><g role="img" aria-label="Arc R"><rect x="350" y="275" width="100" height="50" fill="#ff0000" class="tn"/><rect x="390" y="288" width="20" height="24" rx="2" fill="#000"/><text x="400" y="306" text-anchor="middle" class="tl">R</text></g><g role="img" aria-label="Arc O"><rect x="465" y="275" width="100" height="50" fill="#ffab40" class="tn"/><rect x="505" y="288" width="20" height="24" rx="2" fill="#000"/><text x="515" y="306" text-anchor="middle" class="tl">O</text></g><g role="img" aria-label="Arc G"><rect x="580" y="275" width="100" height="50" fill="#38761d" class="tn"/><rect x="620" y="288" width="20" height="24" rx="2" fill="#000"/><text x="630" y="306" text-anchor="middle" class="tl">G</text></g><g role="img" aria-label="Arc O"><rect x="695" y="275" width="100" height="50" fill="#ffab40" class="tn"/><rect x="735" y="288" width="20" height="24" rx="2" fill="#000"/><text x="745" y="306" text-anchor="middle" class="tl">O</text></g></svg>
+      <figcaption>The beachline [orange (off screen), blue, orange, red, orange, green, orange (off screen)] stored as a balanced binary search tree, where internal nodes mark the breakpoints in order, and external nodes mark the arcs as they appear in order on the beachline.</figcaption>
+    </figure>
+
+    <p>When we want to find the arc that lies directly above a new site, we move down the tree from the root by calculating a breakpoint, then moving to the left or right if the site is to the left or right of the calculated breakpoint. The calculation of the breakpoint is once again located in <a href="#a1">[1]</a>. We move from breakpoint to breakpoint until we reach a leaf node. The arc that this leaf node represents is the arc that the site lies directly under. With this method, we only actually calculate the breakpoints we absolutely need to know, and can find the arc above a new site in \(O(\log n)\) time.</p>
+    <p>In <em>Computational Geometry</em>’s implementation, they handle events with the following:</p>
+    
+    <div class="pseudocode">
+      <div class="ln"><span class="kw">If</span> \(\mathit{ev}\) is a site event occurring at \(p_i\), <span class="fn">HandleSiteEvent</span>(\(p_i\))</div>
+      <div class="ln"><span class="kw">Else</span>, <span class="fn">HandleCircleEvent</span>(\(l\)), where \(l\) is the leaf of \(T\) representing the arc that will disappear.</div>
+    </div>
+
+    <p>Although this is pretty standard and definitely works, my C# implementation uses an abstract event class. <code>SiteEvent</code> and <code>CircleEvent</code> override a <code>HandleEvent</code> function, and hold all information needed to process their events.</p>
+    <p><code>SiteEvent</code> holds:</p>
+    <ul>
+      <li>the coordinates for its site</li>
+      <li>the face that this site relates to</li>
+    </ul>
+    <p><code>CircleEvent</code> holds:</p>
+    <ul>
+      <li>a valid bit</li>
+      <li>the leaf of the BBST that represents the arc that the event will remove</li>
+      <li>the coordinates of the circumcenter</li>
+      <li>the lowest y-coordinate of the circle, which is calculated from the three sites that create it</li>
+    </ul>
+
+    <h2 id="algorithm">Algorithm<a class="anchor" href="#algorithm" aria-label="Link to this section">#</a></h2>
+    <p>The algorithm shown is my own implementation; a more pedagogical one that may make more sense can be found in the previously recommended <em>Computational Geometry</em>, 3rd Edition.</p>
+    <p>The algorithm takes as input a set of sites on the plane. These sites, unsurprisingly, are the origin of the faces in our voronoi diagram. The output of our algorithm is a doubly-connected edge list containing a record for each face, edge and vertex of the voronoi diagram. This data structure is standard for computational geometry solutions, and the specifics are discussed in <a href="#a2">[2]</a> if you are not already familiar.</p>
+    <p>You can find my C# implementation, which is compatible with Unity on my public GitHub under and MIT License here: <a href="https://github.com/MaijaCraddock/UnityVoronoi">GitHub - MaijaCraddock/UnityVoronoi</a></p>
+    <div class="pseudocode">
+      <div class="ln proc"><span class="fn">VoronoiDiagram</span>(\(P\)):</div>
+      <div class="ln i1">The event queue \(Q\) is initialized with all site events \(P\)</div>
+      <div class="ln i1">The BBST \(T\) is initialized empty</div>
+      <div class="ln i1">The doubly-connected edge list \(D\) is initialized with all faces created by the input sites</div>
+      <div class="ln i1 sp"><span class="kw">While</span> \(Q\) is not empty</div>
+      <div class="ln i2">Pop event \(\mathit{ev}\) with largest \(y\)-coordinate from \(Q\)</div>
+      <div class="ln i2">\(\mathit{ev}\).<span class="fn">HandleEvent</span>(\(T\), \(Q\), \(D\))</div>
+      <div class="ln i1 sp">Bounding box \(D\) and handle dangling half-edges</div>
+ 
+      <div class="ln proc sp">Overridden <span class="fn">SiteEvent</span> <span class="fn">HandleEvent</span>(\(T\), \(Q\), \(D\)):</div>
+      <div class="ln i1"><span class="kw">if</span> \(T\) is empty, Insert site into root and <span class="kw">return</span></div>
+      <div class="ln i1 sp">Find the arc \(\alpha\) directly above site</div>
+      <div class="ln i1">Set \(\alpha\)'s \(\mathit{circle}.\mathit{valid}\) to false</div>
+      <div class="ln i1 sp">Replace \(\alpha\) with a subtree of 2 breakpoints and 3 arcs, then rebalance the tree</div>
+      <div class="ln i1 sp">Create new half edges in \(D\) for the edges between the face belonging to the site of \(\alpha\) and the site being inserted</div>
+      <div class="ln i1 sp">Perform special case handling where the site is level with the split arc, and only one breakpoint exists</div>
+      <div class="ln i1 sp">Check for new triples where the inserted site acts as the left and right arc of a triple</div>
+ 
+      <div class="ln proc sp">Overridden <span class="fn">CircleEvent</span> <span class="fn">HandleEvent</span>(\(T\), \(Q\), \(D\)):</div>
+      <div class="ln i1"><span class="kw">If</span> invalid, <span class="kw">return</span></div>
+      <div class="ln i1 sp">Remove the arc \(\alpha_j\) being swallowed by the circle event, and invalidate the circle events of its left and right neighbor, which use \(\alpha_j\) as part of their triples</div>
+      <div class="ln i1 sp">Update half edge records in \(D\):</div>
+      <div class="ln i2">Retrieve the half edges formed by the left and right breakpoints \(\langle i, j\rangle\) and \(\langle j, k\rangle\), which are converging</div>
+      <div class="ln i2">Create new half edge records for the edge \(\langle i, k\rangle\)</div>
+      <div class="ln i1 sp">Remove \(\alpha_j\) from \(T\). This also removes internal nodes \(\langle i, j\rangle\) and \(\langle j, k\rangle\) from \(T\) and adds \(\langle i, k\rangle\) in their place:</div>
+      <div class="ln i2">The sibling of \(\alpha_j\) replaces the internal node that was farthest from the root</div>
+      <div class="ln i2">The new breakpoint \(\langle i, k\rangle\) replaces the internal node closest to the root</div>
+      <div class="ln i1 sp">Create a vertex record in \(D\), then set \(\langle i, j\rangle\) and \(\langle j, k\rangle\)'s twin edge records' origin fields to the new vertex. Set half edge \(\langle i, k\rangle\)'s origin field to this vertex as well</div>
+      <div class="ln i1 sp">Set half edge record fields for \(\mathit{next}\), \(\mathit{twin}.\mathit{prev}\) and \(\langle i, k\rangle.\mathit{prev}\)</div>
+      <div class="ln i1 sp">Check for triples where the former left neighbor is the middle arc and where the former right neighbor is the middle arc</div>
+    </div>
+
+    <section class="appendix">
+    <h2 id="appendix">Appendix<a class="anchor" href="#appendix" aria-label="Link to this section">#</a></h2>
+
+    <h3 id="a1">1. Intersection Math</h3>
+    <p>The math behind intersections isn’t as important to understanding the algorithm as much as the topics discussed up until this point, but it is important for implementing the algorithm in practice.</p>
+    <p>Given two parabolas that share a directrix but have different foci, we can determine where they intersect and under which cases they intersect one, two or zero times. Before I talk about the math, I’ll first define a degenerate case that appears several times. When the directrix is at the same point as a site (focus), the parabola formed is not an arc or a true parabola but rather a vertical line.</p>
+    <p><strong>Two Intersections.</strong> This happens in the general case: the lower focus creates a narrower parabola than the upper focus, and “splits” its arc with two intersections.</p>
+    <p><strong>One Intersection.</strong> This happens in two cases. First of all, the sites may be of the same y-value, in which case they will continue to have only a single intersection for any directrix value.</p>
+    <p>Secondly, we also have a single intersection when there is one non-degenerate site, and another site that is degenerate, and is rather a vertical line. Because the vertical line stops being degenerate and turns into a true parabola at any point later on, we create two breakpoints in our data structure.</p>
+    <p><strong>Zero Intersections.</strong> This also happens in two cases. First of all, it can occur when two sites are of the same y-value and degenerate. In this scenario, both sites create vertical lines that trivially never intersect. Similar to the second case of the One Intersection example, we create a single breakpoint in our data structure because we can still figure out when the arcs will intersect after they exit a degenerate state.</p>
+    <p>Secondly, and what actually occurs at runtime, the arc created by a site is the only arc above the directrix, and thus has no intersections yet.</p>
+    <p>There are other cases to consider normally, but we limit ourselves to understanding these cases, as they are the only ones that can occur when we know both sites are unique and share a directrix. We know the directrix is below the sites, which is an invariant guaranteed by our sweepline.</p>
+    <p>Given a horizontal directrix \(y = d\) and a focus \((x_p, y_p)\), the algebraic equation of the parabola is</p>
+    <div class="derivation">
+      <div class="rhs">\[ y = \frac{(x - x_p)^2 + y_p^2 - d^2}{2(y_p - d)}. \]</div>
+    </div>
+    <p>Since we have two parabolas, formed by sites \(i\) and \(j\), we can find their intersections by setting \(y_i(x) = y_j(x)\):</p>
+    <div class="derivation">
+      <div class="rhs">\[ \frac{(x - x_i)^2 + y_i^2 - d^2}{2(y_i - d)} = \frac{(x - x_j)^2 + y_j^2 - d^2}{2(y_j - d)}. \]</div>
+    </div>
+    <p>From here the solution is implementation defined. I looked for a solution that minimizes floating point error and the number of terms and calculations, and found one that I believe cancels out the most terms, although there may be better ones. Although it's lengthy, I leave my entire solution for the curious reader. What's important in the end is that your solution calculates valid breakpoints with negligible error.</p>
+    <p>Let \(I = y_i - d\) and \(J = y_j - d\), the vertical distances from \(p_i\) and \(p_j\) to the directrix. Convert to terms, cross-multiply, expand, then solve with the standard quadratic formula:</p>
+    <div class="derivation">
+      <div class="rhs">\[ \begin{array}{l}
+    J\big((x - x_i)^2 + y_i^2 - d^2\big) \\[.6em] \quad = I\big((x - x_j)^2 + y_j^2 - d^2\big) \\[1.6em]
+    J\big(x^2 + x_i^2 - 2xx_i + y_i^2 - d^2\big) \\[.6em] \quad = I\big(x^2 + x_j^2 - 2xx_j + y_j^2 - d^2\big) \\[1.6em]
+    J\big(x^2 + x_i^2 - 2xx_i + y_i^2 - d^2\big) - I\big(x^2 + x_j^2 - 2xx_j + y_j^2 - d^2\big) = 0 \\[1.6em]
+    (J - I)x^2 + 2(I x_j - J x_i)x \\[.6em] \quad + \Big(J(x_i^2 + y_i^2 - d^2) - I(x_j^2 + y_j^2 - d^2)\Big) = 0
+    \end{array} \]</div>
+      <div class="rhs">\[ \begin{aligned}
+    a &= J - I \\[1em]
+    b &= 2(I x_j - J x_i) \\[1em]
+    c &= J(x_i^2 + y_i^2 - d^2) - I(x_j^2 + y_j^2 - d^2)
+    \end{aligned} \]</div>
+      <div class="rhs">\[ \begin{array}{l}
+    x = \dfrac{-b \pm \sqrt{b^2 - 4ac}}{2a} \\[1em]
+    \quad = \dfrac{-2(I x_j - J x_i) \pm \sqrt{\begin{array}{l}
+      \big(2(I x_j - J x_i)\big)^2 \\[.6em]
+      \quad - 4(J - I)\big(J(x_i^2 + y_i^2 - d^2) \\[.6em]
+      \qquad - I(x_j^2 + y_j^2 - d^2)\big)
+    \end{array}}}{2(J - I)}
+    \end{array} \]</div>
+    </div>
+    <p>Simplifying the discriminant:</p>
+    <div class="derivation">
+      <div class="rhs">\[ b^2 = 4(I x_j - J x_i)^2 = 4I^2x_j^2 + 4J^2x_i^2 - 8IJ\,x_ix_j \]</div>
+    </div>
+    <div class="derivation">
+      <div class="rhs">\[ 4ac = 4(-I + J)\left(Jx_i^2 + Jy_i^2 - Jd^2 - Ix_j^2 - Iy_j^2 + Id^2\right) \]</div>
+      <div class="rhs">\[ \begin{array}{l} = 4\big(-IJx_i^2 - IJy_i^2 + IJd^2 + I^2x_j^2 + I^2y_j^2 - I^2d^2 \\[.6em] \quad + J^2x_i^2 + J^2y_i^2 - J^2d^2 - IJx_j^2 - IJy_j^2 + IJd^2\big) \end{array} \]</div>
+      <div class="rhs">\[ \begin{array}{l} = 4\big(-IJx_i^2 - IJy_i^2 + 2IJd^2 + I^2x_j^2 + I^2y_j^2 - I^2d^2 \\[.6em] \quad + J^2x_i^2 + J^2y_i^2 - J^2d^2 - IJx_j^2 - IJy_j^2\big) \end{array} \]</div>
+    </div>
+    <p>Grouping into \(d\) terms, \(x_j^2\) and \(x_i^2\) terms, and \(y_i^2\) and \(y_j^2\) terms:</p>
+    <div class="derivation">
+      <div class="rhs">\[ \begin{array}{l} 4ac = -4d^2(I - J)^2 + 4(I - J)(Ix_j^2 - Jx_i^2) \\[.6em] \quad + 4(I - J)(Iy_j^2 - Jy_i^2) \end{array} \]<span class="why">group like terms</span></div>
+    </div>
+    <p>With \(I = y_i - d\) and \(J = y_j - d\), we have \(I - J = y_i - y_j\):</p>
+    <div class="derivation">
+      <div class="rhs">\[ \begin{array}{l} 4ac = -4d^2(y_i - y_j)^2 + 4(y_i - y_j)(Ix_j^2 - Jx_i^2) \\[.6em] \quad + 4(y_i - y_j)(Iy_j^2 - Jy_i^2) \end{array} \]<span class="why">sub \(I - J\)</span></div>
+      <div class="rhs">\[ = -4d^2(y_i - y_j)^2 + 4(y_i - y_j)\big(I(x_j^2 + y_j^2) - J(x_i^2 + y_i^2)\big) \]<span class="why">group like terms</span></div>
+      <div class="rhs">\[ \begin{array}{l} = 4(y_i - y_j)\big(-d^2(y_i - y_j) \\[.6em] \qquad + I(x_j^2 + y_j^2) - J(x_i^2 + y_i^2)\big) \end{array} \]<span class="why">factor \(4(y_i - y_j)\)</span></div>
+      <div class="rhs">\[ \begin{array}{l} = 4(y_i - y_j)\big(-d^2(y_i - y_j) + Ix_j^2 + (y_i - d)y_j^2 \\[.6em] \qquad - Jx_i^2 - (y_j - d)y_i^2\big) \end{array} \]<span class="why">sub \(I\) and \(J\) on \(y\) components</span></div>
+      <div class="rhs">\[ \begin{array}{l} = 4(y_i - y_j)\big(-d^2(y_i - y_j) + Ix_j^2 - Jx_i^2 \\[.6em] \qquad + y_iy_j^2 - y_jy_i^2 - dy_j^2 + dy_i^2\big) \end{array} \]</div>
+      <div class="rhs">\[ \begin{array}{l} = 4(y_i - y_j)\big(-d^2(y_i - y_j) + Ix_j^2 - Jx_i^2 \\[.6em] \qquad + (y_i - y_j)(-y_iy_j + d(y_i + y_j))\big) \end{array} \]<span class="why">factor \((y_i - y_j)\)</span></div>
+      <div class="rhs">\[ \begin{array}{l} = 4(y_i - y_j)\big(Ix_j^2 - Jx_i^2 \\[.6em] \qquad + (y_i - y_j)(-y_iy_j + d(y_i + y_j) - d^2)\big) \end{array} \]<span class="why">group line terms</span></div>
+      <div class="rhs">\[ = 4(y_i - y_j)\big(Ix_j^2 - Jx_i^2 + (y_i - y_j)(-(y_i - d)(y_j - d))\big) \]<span class="why">factor</span></div>
+      <div class="rhs">\[ = 4(y_i - y_j)\big(Ix_j^2 - Jx_i^2 + (y_i - y_j)(-IJ)\big) \]<span class="why">sub in \(I\) and \(J\)</span></div>
+      <div class="rhs">\[ = 4(y_i - y_j)\big(Ix_j^2 - Jx_i^2 - IJ(y_i - y_j)\big) \]</div>
+      <div class="rhs">\[ = 4(y_i - y_j)(Ix_j^2 - Jx_i^2) - 4IJ(y_i - y_j)^2 \]</div>
+      <div class="rhs">\[ = 4(I - J)(Ix_j^2 - Jx_i^2) - 4IJ(y_i - y_j)^2 \]<span class="why">sub in \(I\) and \(J\)</span></div>
+      <div class="rhs">\[ = 4I^2x_j^2 + 4J^2x_i^2 - 4IJx_j^2 - 4IJx_i^2 - 4IJ(y_i - y_j)^2 \]<span class="why">expand</span></div>
+    </div>
+    <p>Subtracting from \(b^2\):</p>
+    <div class="derivation">
+      <div class="rhs">\[ \begin{array}{l} b^2 - 4ac = 4I^2x_j^2 + 4J^2x_i^2 - 8IJx_ix_j - 4I^2x_j^2 \\[.6em] \quad - 4J^2x_i^2 + 4IJx_j^2 + 4IJx_i^2 + 4IJ(y_i - y_j)^2 \end{array} \]</div>
+      <div class="rhs">\[ = -8IJx_ix_j + 4IJx_j^2 + 4IJx_i^2 + 4IJ(y_i - y_j)^2 \]<span class="why">cancel out terms</span></div>
+      <div class="rhs">\[ = 4IJ\big(-2x_ix_j + x_j^2 + x_i^2 + (y_i - y_j)^2\big) \]</div>
+      <div class="rhs">\[ = 4IJ\big((x_i - x_j)^2 + (y_i - y_j)^2\big) \]<span class="why">factor</span></div>
+      <div class="rhs">\[ = 4IJ\,\lvert p_i - p_j\rvert^2 \]<span class="why">distance formula</span></div>
+    </div>
+    <p>So the roots are</p>
+    <div class="derivation">
+      <div class="rhs">\[ \begin{array}{l}
+    x = \dfrac{-2(I x_j - J x_i) \pm 2\sqrt{IJ\,\lvert p_i - p_j\rvert^2}}{2(J - I)} \\[1em]
+    \quad = \dfrac{J x_i - I x_j \pm \sqrt{IJ\,\lvert p_i - p_j\rvert^2}}{J - I}
+    \end{array} \]</div>
+    </div>
+    <p>When \(y_i \gt y_j\), \(I \gt J\) and the denominator \(J - I\) is negative. When \(y_i \lt y_j\), the denominator is positive. Usually, when \(y_i \gt y_j\) you take the left intersection, and when \(y_i \lt y_j\) you take the right one, because lower sites “split” arcs from higher sites, and the left intersection minimizes \(x\) while the right one maximizes it. But because the denominator switches sign with \(y_i \gt y_j\), we can always take the positive root.</p>
+    <p><strong>Proof.</strong> Let</p>
+    <div class="derivation">
+      <div class="rhs">\[ \begin{array}{l}
+    f(x) = (J - I)x^2 + 2(I x_j - J x_i)x + c \\[.6em]
+    \quad = 2IJ\,\big(y_i(x) - y_j(x)\big)
+    \end{array} \]</div>
+    </div>
+    <p>Then \(f(x) = 0\) means \(y_i(x) = y_j(x)\), \(f(x) \gt 0\) means \(y_i(x) \gt y_j(x)\) so the beachline is \(y_j(x)\), and \(f(x) \lt 0\) means the beachline is \(y_i(x)\). The derivative</p>
+    <div class="derivation">
+      <div class="rhs">\[ f'(x) = 2(J - I)x + 2(I x_j - J x_i) \]</div>
+    </div>
+    <p>shows which way we cross at a breakpoint. If \(f'(x) \gt 0\), \(y_i\) is increasing faster than \(y_j\) at the breakpoint, so \(y_j\) is on the beachline after it. If \(f'(x) \lt 0\), \(y_i\) is on the beachline after it. If \(f'(x) = 0\), we are in a degenerate case, where either \(p_i\) or \(p_j\) sits on the beachline, or they are the same point. Because \(y_i(x)\) forms the arc to the left of the breakpoint and \(y_j(x)\) the arc to the right, \(f'(x) \gt 0\) at our breakpoint's x coordinate.</p>
+    <p>Let \(x_+\) and \(x_-\) be the roots with \(+\) and \(-\) respectively, and write \(s = \sqrt{IJ\,\lvert p_i - p_j\rvert^2}\). Then</p>
+    <div class="derivation">
+      <div class="rhs">\[ \begin{aligned}
+    f'(x_\pm) &= 2(J - I)\cdot\frac{J x_i - I x_j \pm s}{J - I} + 2(I x_j - J x_i) \\[.6em]
+              &= 2(J x_i - I x_j) \pm 2s + 2(I x_j - J x_i) = \pm 2s.
+    \end{aligned} \]</div>
+    </div>
+    <p>In general cases, \(f'(x_+)\) is always greater than zero and \(f'(x_-)\) is always less than zero for any \(p_i\), \(p_j\), and directrix. So the positive root always describes the intersection where the arc of \(p_i\) is to the left of \(p_j\), and the negative root describes the other intersection, where \(p_j\) is to the left. Thus, for our program we simply calculate</p>
+    <div class="derivation">
+      <div class="rhs">\[ x = \frac{J x_i - I x_j + \sqrt{IJ\,\lvert p_i - p_j\rvert^2}}{J - I}, \]</div>
+    </div>
+    <p>worrying about the degenerate cases only conditionally, so we can avoid intermediate calculations.</p>
+
+    <h3 id="a2">2. The DCEL</h3>
+    <p>The Doubly Connected Edge List is a data structure used very often in computational geometry, and is particularly useful for planar solutions, such is the case with Voronoi diagrams. The DCEL stores a record of each face, edge and vertex on a subdivision. Each of these has structures that will be discussed below. For each structure, its record may record additional information.</p>
+    <p>The list is “doubly connected” because each edge stores a pointer to both the next edge in the list and the previous edge in the list. It is useful to view the edge as two “half-edges”, each of which is incident to only one face of the two faces the full edge is incident to. This allows some very nice characteristics when it comes to actually using the structure.</p>
+    <p>The half edge additionally stores an origin point, which is a pointer to a vertex record, the face it is incident to, and the twin edge that moves in the opposite direction. It's important to point out that the origin of the half edge is the destination of the twin edge and vice versa. Because of this, we don’t need to store them separately, and can find the destination by accessing <code>half.twin.origin</code> when needed. It is also possible for some of these fields to be null, as there are points in the voronoi diagram when the destination vertex of a traced edge is yet to be found, and the origin of that half-edge’s twin is therefore impossible to set. Both the nullability and accessor logic mentioned for these fields can apply to several others in the DCEL. If it ever feels like a field should be listed somewhere and isn’t, it is a good idea to try and figure out if there is some other way to access that field by jumping through pointers.</p>
+    <p>Something else that is important to mention is that half edges always move in a consistent orientation. In our case, each half edge always moves counterclockwise around its incident face. This is not only useful for testing, but also for many techniques; see back-face culling!</p>
+    <p>A face record stores the location of the site that created it as additional information. It also stores any one half edge incident to it. What this allows is a full reconstruction of the face by traversing half-edges. Each half edge has a <code>next</code> field, and by traversing a half-edge’s <code>next</code> field until we perform a full cycle, we can visit each edge in the face and each vertex.</p>
+    <p>A vertex record stores its position as well as any incident edge. It is possible to access all other edges connected to this vertex from this incident edge by accessing some combination of <code>twin</code>, <code>next</code> and <code>prev</code> fields. It is also possible to access all faces touching this vertex from one edge.</p>
+
+    <h3 id="a3">3. Complexity</h3>
+    <p><em>Computational Geometry</em> states the following theorem that we will prove in this section: “Theorem 7.3: For \(n \ge 3\), the number of vertices in the Voronoi diagram of a set of \(n\) point sites in the plane is at most \(2n - 5\), and the number of edges is at most \(3n - 6\).”</p>
+    <p>Consider a Voronoi diagram of edges (not half-edges). If all sites are collinear, this is proven trivially; otherwise a general proof follows. Euler’s formula is a staple planar formula in graph theory. The formula \(V - E + F = 2\) holds for any connected, planar graph with \(V\) vertices, \(E\) edges, and \(F\) faces.</p>
+    <p>A voronoi diagram has half-infinite edges, but we can add a “sentinel” vertex at infinity and connect our unbounded edges to it. This effectively adds one vertex to our graph, and no additional faces or edges. More importantly, this satisfies the conditions for Euler’s formula to apply.</p>
+    <div class="derivation">
+      <div class="rhs">\[ (V + 1) - E + F = 2. \]</div>
+    </div>
+    <p>We can make a few other important observations about our graph:</p>
+    <ul>
+      <li>Each site creates one face.</li>
+      <li>Every edge in the graph has exactly two vertices.</li>
+      <li>Every vertex has at least degree three, as at least two breakpoints converge, and one breakpoint remains on vertex creation.</li>
+      <li>The sentinel vertex additionally has a degree of at least three, as the convex hull of the sites with at least three sites has at least three unbounded edges.</li>
+    </ul>
+    <p>Therefore, \(2E \ge 3(V + 1)\) follows. We can use the augmented graph with the original Euler's formula.</p>
+    <p>First, the number of edges in a Voronoi diagram is at most \(3n - 6\), where \(n\) is the number of sites:</p>
+    <div class="derivation">
+      <div class="rhs">\[ \begin{aligned}
+    F &= 2 + E - (V + 1) \\[1em]
+    3F &= 6 + 3E - 3(V + 1) \\[1em]
+    3F &\ge 6 + 3E - 2E \\[1em]
+    3F &\ge 6 + E \\[1em]
+    E &\le 3F - 6.
+    \end{aligned} \]</div>
+    </div>
+    <p>Second, the number of vertices in a Voronoi diagram is at most \(2n - 5\), where \(n\) is the number of sites:</p>
+    <div class="derivation">
+      <div class="rhs">\[ \begin{aligned}
+    F &= 2 + E - (V + 1) \\[1em]
+    2F &= 4 + 2E - 2(V + 1) \\[1em]
+    2F &\ge 4 + 3(V + 1) - 2(V + 1) \\[1em]
+    2F &\ge 4 + (V + 1) \\[1em]
+    V &\le 2F - 5.
+    \end{aligned} \]</div>
+    </div>
+    <p>Operations on the beachline and sweepline data structures take \(O(\log n)\) time each, and operations on the DCEL take constant time. The number of half-edges, which are what we’re actually using to store the diagram, are twice the number of edges, which is a linear increase and does not impact complexity. Therefore, each event takes \(O(\log n)\) time, as all other operations on event handling are also in constant time.</p>
+    <p>There are \(n\) site events, and the number of processed circle events is equivalent to the number of vertices, which we’ve just proven to be bound to at most \(2n - 5\). Therefore the time complexity is \(O(n \log n)\). Additionally, each valid and processed event creates at most two circle events, which still need to be deleted at \(O(\log n)\) time from the event queue. This means there are at most \(2(n + V)\) circle events created, and \(O(n)\) deletions costing \(O(n \log n)\) in total.</p>
+    <p>The vertices, edges and faces are all linear complexity; therefore the storage complexity of the program is \(O(n)\).</p>
+
+    </section>
+
+    <p><a href="index.html">Back to the front page</a></p>
+  </main>
+
+  <footer>
+    <p>© 2026 Maija Craddock. <a href="index.html">Home</a> · <a href="about.html">Portfolio</a></p>
+  </footer>
+</body>
+</html>

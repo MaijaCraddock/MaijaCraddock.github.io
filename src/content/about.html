@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portfolio — Maija Craddock</title>
+  <meta name="description" content="My portfolio, experience, and contact information.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="inner">
+      <a class="brand" href="index.html"><span class="blob" aria-hidden="true"></span>Portfolio</a>
+      <nav aria-label="Main">
+        <a href="index.html">Home</a>
+        <a href="about.html" aria-current="page">Portfolio</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="runway-wide">
+    <section class="portfolio-hero" aria-live="polite">
+      <canvas class="portfolio-voronoi" aria-hidden="true"></canvas>
+      <div class="portfolio-hero-shade" aria-hidden="true"></div>
+      <div class="portfolio-hero-content">
+        <p class="portfolio-eyebrow">Portfolio</p>
+        <h1 class="portfolio-title">Maija Craddock</h1>
+        <div class="portfolio-copy">
+          <p>Hello! I am a recent Computer Science Master's graduate from the University of Tennessee with a foundation in Systems Programming, Algorithms, and Computer Graphics.</p>
+          <p>My languages of choice are typically:<br>C++, C#, C, and Python.</p>
+        </div>
+      </div>
+      <p class="portfolio-metric" aria-hidden="true"></p>
+    </section>
+        
+    <h2 id="featured">Featured Work<a class="anchor" href="#featured" aria-label="Link to this section">#</a></h2>
+    <article class="project" id="fowl-heat">
+      <h3>Fowl Heat</h3>
+
+      <figure class="carousel carousel--hero" data-carousel="stack" aria-label="Fowl Heat screenshots">
+        <div class="carousel-stage" style="--ratio: 16 / 9">
+          <img src="/images/FHTitle.png" alt="Fowl Heat title screen">
+          <img src="/images/FHNest2.png" alt="A nest of feathers and sticks above the player’s hand of cards">
+          <img src="/images/FHFriendEncounter.png" alt="A Friend event offering a choice of behavior cards">
+        </div>
+      </figure>
+
+      <p class="project-grant">Recipient of the <a href="https://www.nsf.gov/awardsearch/show-award/?AWD_ID=2411742">Design NSF grant 2411742</a> &nbsp;·&nbsp; <a href="https://cultivatingcreativity.itch.io/fowl-heat">Play Fowl Heat on itch.io</a></p>
+      <p>As temperatures rise, animals worldwide are encountering intense, sometimes deadly, heat. Reimagined from the research of Dr. Liz Derryberry and Dr. Emmy James, play as an adult bird during the breeding season, working to maintain your own health and that of your chicks under intense, unrelenting heat.</p>
+
+      <details class="project-more">
+        <summary>Click to expand</summary>
+        <div class="project-more-body">
+          <p>Fowl Heat is an online and physical game developed under Cary Staples in the Unity Game Engine. As one of the two computer scientists on the team, I worked alongside Dr. Emmy James to adapt their research data from “<strong>Collaborative Research: Is behavior on the front-line of solving the problem of inescapable heat? Leveraging intraspecific variation in a cavity-nesting bird thriving in heat</strong>” into an educational game about birds surviving heat events through behaviors.</p>
+
+          <section class="project-section project-section--media project-section--narrow">
+            <h4>Physical Boardgame</h4>
+            <div class="side-column side-column--narrow">
+              <figure class="carousel carousel--sides" data-carousel="stack" aria-label="Physical boardgame photos">
+                <div class="carousel-stage" style="--ratio: 3 / 4">
+                  <img src="/images/FHPaper1.JPG" alt="The physical Fowl Heat boardgame, photo 1">
+                  <img src="/images/FHPaper2.jpg" alt="The physical Fowl Heat boardgame, photo 2">
+                  <img src="/images/FHPaper3.JPG" alt="The physical Fowl Heat boardgame, photo 3">
+                </div>
+              </figure>
+            </div>
+            <div class="side-text">
+            <p>What began as a paper prototype expanded into an additional way to play the game we were building. The core systems remained the same, with resource gathering, nest and risk management, and random events driving the main gameplay loop. Some changes benefit a physical game, like a simplification of one or more of these events, and the removal of obfuscation that forms a digital game’s architecture.</p>
+            </div>
+          </section>
+
+          <section class="project-section project-section--media">
+            <h4>Gameplay Systems, Behaviors and Resources</h4>
+            <div class="side-column">
+              <img class="side-image" src="/images/FHNest.png" alt="The nest, with chicks and several cards in play">
+              <div class="hand" data-carousel="hand" aria-label="Fanned hand of cards"
+                data-cards="FHCardBathe.png,FHCardBeetle.png,FHCardDragonfly.png,FHCardFeather.png,FHCardFly.png,FHCardGularFlutter.png,FHCardLadybug.png,FHCardMayfly.png,FHCardShuttle.png,FHCardStick.png,FHCardSwarm.png,FHCardTallStance.png,FHCardThermalSneeze.png,FHCardVisit.png,FHCardWasp.png,FHCardWhiteStick.png,FHCardWingSpread.png">
+                <div class="hand-stage"></div>
+              </div>
+            </div>
+            <div class="side-text">
+            <p>The main player input driving player expression are cards that come in two forms, behaviors and resources.</p>
+            <p>Behavior cards are actions that a bird can take which reduce or increase a stat among the three meters: Hunger, Heat, and Risk.</p>
+            <p>These behaviors may have additional effects depending on the location the cards are played in. For example, the Bathe card reduces heat more when played on a River tile.</p>
+            <p>Resource cards are materials or consumables that a bird can use on itself, its nest, or its chicks. Some cards are rarer than others, such as white sticks, which reduce heat more than a normal stick. Some cards, like bugs, change behavior when played on nest tiles or other tiles.</p>
+            <p>The hand size of the player is limited to five in both the digital and physical version of the game. This drives a risk-reward system, as the survivability of the parent increases when behaviors fill the hand, but the lack of resources may bring danger to the chicks in an underdeveloped nest.</p>
+            </div>
+          </section>
+
+          <section class="project-section project-section--media">
+            <h4>Gameplay Systems, Events</h4>
+            <div class="side-column">
+              <img class="side-image" src="/images/FHEncounterImage.png" alt="An event announcing that you found two resources">
+              <figure class="carousel carousel--aligned" data-carousel="aligned" aria-label="Predator events">
+                <div class="carousel-stage" style="--ratio: 1 / 0.62">
+                  <img src="/images/FHChipmunkPredatorEvent.png" alt="A chipmunk predator attack event">
+                  <img src="/images/FHBlueJayPredatorEvent.png" alt="A blue jay predator attack event">
+                  <img src="/images/FHHawkPredatorEvent.png" alt="A hawk predator attack event">
+                  <img src="/images/FHMockingbirdPredatorEvent.png" alt="A mockingbird predator attack event">
+                  <img src="/images/FHRaccoonPredatorEvent.png" alt="A raccoon predator attack event">
+                  <img src="/images/FHSquirrelPredatorEvent.png" alt="A squirrel predator attack event">
+                </div>
+              </figure>
+            </div>
+            <div class="side-text">
+            <p>The event system drives the emergent gameplay most associated with roguelike games that we drew inspiration from.</p>
+            <p>Events occur each time a bird travels to a new tile and can be positive or negative. An example of a positive event could be an increased availability of Bug resources kickstarted by a lawnmower nearby, while a negative event is usually the arrival of a predator.</p>
+            <p>Events can affect the bird’s Hunger, Heat or Risk meter, as is the case with predators increasing the risk of the bird.</p>
+            <p>Events can also affect the bird’s hand, as is the case with resource events allowing the player to choose between two resources, or Friend events allowing the player to choose between two behavior cards to add to their hand.</p>
+            <p>The third type of event can affect a global state of either the entire game or a singular tile. One example being the previously mentioned lawnmower event, which increases the availability of bugs on the tile the event was encountered.</p>
+            </div>
+          </section>
+
+          <section class="project-section">
+            <h4>Gameplay Systems Design</h4>
+            <p>Both gameplay systems discussed were built with encapsulation and templating in mind. In other words, it takes very little effort to add a new card, or a new event, and each system allows a developer to quickly and easily adjust the effects or outcomes of both events and cards occurring. For example, a new “Heatwave” event that increases the heat of all cards for a variable number of turns is not difficult to adapt into the systems in place. This is mostly achieved through the use of Unity Scriptable Objects and Prefabs.</p>
+            <p>On top of my work on the gameplay systems, my responsibilities included the creation of a code design doc that outlined how to design game objects for consistent logic across portions of the project outside of each team member’s scope, as well as the general user interface.</p>
+          </section>
+        </div>
+      </details>
+    </article>
+
+    <h2 id="experience">Experience<a class="anchor" href="#experience" aria-label="Link to this section">#</a></h2>
+    <div class="entry">
+      <div class="when">June 2025 – August 2025</div>
+      <h3>Gameplay Programmer – Fowl Heat Team (University of Tennessee, Knoxville)</h3>
+      <p>Built a dynamic and scalable event system that enables easy balancing changes. Built the user interface that interacts with the event system and can be plugged into additional game systems.</p>
+      <p>Related Awards and Accolades: Accepted into the MIT Information Design Conference, accepted Design NSF Grant</p>
+    </div>
+    <div class="entry">
+      <div class="when">July 2024 – August 2024</div>
+      <h3>Software Engineer – Epic Stock Media, Franklin TN</h3>
+      <p>Updated the legacy code of abandoned projects, implemented DevOps, and managed a CI/CD for staging and main branch. Converted projects from single threaded to multi-threaded with real world testing to confirm and validate speedup.</p>
+    </div>
+    <div class="entry">
+      <div class="when">June 2021 – August 2021</div>
+      <h3>Content Manager – Epic Stock Media, Franklin TN</h3>
+      <p>Managed several storefronts with different upload requirements for multiple media formats. Automated error detection with python scripts, which pulled out files that would be unable to be uploaded to a storefront.</p>
+    </div>
+
+    <h2 id="education">Education<a class="anchor" href="#education" aria-label="Link to this section">#</a></h2>
+    <div class="entry">
+      <div class="when">August 2021 – December 2026</div>
+      <h3>Master of Computer Science, University of Tennessee <span class="gpa">| GPA: 3.93</span></h3>
+      <p>Curriculum focus in Computer Systems, Algorithms and Datastructures</p>
+      <p>Notable Classes: Parallel Programming, Biologically-Inspired Computation, Computer Systems Organization, Adv. Algorithm &amp; Programming</p>
+      <p>Self Taught in Game Development with experience using OpenGL and Unity.</p>
+      <div class="awards">
+        <div class="awards-title">Awards and Accolades</div>
+        <dl class="awards-list">
+          <div><dt>Graduate HOPE Aspire</dt><dd>Fall 2025 – Spring 2026</dd></div>
+          <div><dt>Graduate HOPE Scholarship</dt><dd>Fall 2025 – Spring 2026</dd></div>
+          <div><dt>UT Vol Scholarship In-State</dt><dd>8 semesters, Fall 2021 – Spring 2025</dd></div>
+          <div><dt>TSAC-TN Ed Lottery Scholarship</dt><dd>9 terms, Fall 2021 – Spring 2025</dd></div>
+          <div><dt>Ron/Jessica Morris Engineering</dt><dd>Spring 2024</dd></div>
+          <div><dt>HEERF III BG</dt><dd>Fall 2021</dd></div>
+        </dl>
+      </div>
+    </div>
+
+    <h2 id="skills">Skills<a class="anchor" href="#skills" aria-label="Link to this section">#</a></h2>
+    <ul class="tags">
+      <li>Algorithms</li>
+      <li>Datastructures</li>
+      <li>Systems</li>
+      <li>Game Development</li>
+    </ul>
+
+    <h2 id="contact">Contact<a class="anchor" href="#contact" aria-label="Link to this section">#</a></h2>
+    <ul>
+      <li>Email: <a href="mailto:maijacraddock@gmail.com">maijacraddock@gmail.com</a></li>
+      <li>GitHub: <a href="https://github.com/MaijaCraddock">github.com/MaijaCraddock</a></li>
+      <li>LinkedIn: <a href="https://www.linkedin.com/in/maija-craddock-2493b82b0/">linkedin.com/in/maija-craddock-2493b82b0</a></li>
+      <li>Résumé: <a href="/Resume.pdf">Download my résumé (PDF)</a></li>
+    </ul>
+  </main>
+
+  <footer>
+    <p>© 2026 Maija Craddock. <a href="index.html">Home</a></p>
+  </footer>
+</body>
+</html>

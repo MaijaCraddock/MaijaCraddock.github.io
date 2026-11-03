@@ -1,0 +1,10 @@
+{
+  "description": "A Voronoi reference page featuring three PNG images below the introduction to help visitors explore and understand Voronoi diagrams.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
